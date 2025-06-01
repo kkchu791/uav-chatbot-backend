@@ -1,8 +1,11 @@
 from services.openai_client import client
 from models.session_store import SessionStore
 from pathlib import Path
+from fastapi.responses import StreamingResponse
+from typing import Generator
 import time
 import os
+
 
 def upload_files_to_llm(session_id):
     file_paths = [
@@ -26,22 +29,7 @@ def upload_files_to_llm(session_id):
 
     session_store.save_sessions()
 
-def wait_for_run_completion(client, thread_id, run_id, max_retries=30, delay=1):
-    for i in range(max_retries):
-        run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-        print(f"[{i+1}] Run status: {run.status}")
-        
-        if run.status == "completed":
-            return run
-        elif run.status in {"failed", "cancelled", "expired"}:
-            raise Exception(f"Run failed with status: {run.status} {run, 'run'}")
-        
-        time.sleep(delay)
-
-    raise TimeoutError("Assistant run did not complete in time.")
-    
-
-def ask_llm(question: str, session_id: str) -> str:
+def ask_llm(question: str, session_id: str) -> Generator[str, None, None]:
     # i need to grab the session because I want to create or find thread
     # to connection my prompt with
     session_store = SessionStore()
@@ -64,27 +52,31 @@ def ask_llm(question: str, session_id: str) -> str:
     )
     
     # Trigger the assistant to run the message and give a response
-    run = client.beta.threads.runs.create(
+    stream = client.beta.threads.runs.create(
         thread_id=session.get_thread_id(),
         assistant_id=os.getenv("OPENAI_ASSISTANT_ID"),
-        tools=[{"type": "code_interpreter"}]
+        tools=[{"type": "code_interpreter"}],
+        stream=True
     )
 
-    # poll and wait for completion
-    wait_for_run_completion(client, session.get_thread_id(), run.id)
+    #setting up queue for streaming
+    queue = session.get_queue()
+    if not queue:
+        raise Exception("No active SSE connection for this session")
 
-    #fetch the latest assistant message
-    messages = client.beta.threads.messages.list(thread_id=session.get_thread_id())
-    answers = []
-    for message in reversed(messages.data):
-        if message.role == "assistant":
-            for block in message.content:
-                if block.type == "text":
-                    answers.append(block.text.value)
+    # pump the response back to the client
+    for event in stream:
+        if event.event == "thread.message.delta":
+            delta = event.data.delta
+            for part in delta.content:
+                if part.type == "text":
+                    queue.put_nowait(part.text.value.strip())
+                    print("Pushing to queue:", part.text.value)
+                else:
+                    print(f"Skipping non-text part: {part.type}")
 
-    for i, text in enumerate(reversed(answers)):
-        print(f"Response {i+1}: {text}")
+    queue.put_nowait("[DONE]")
 
     session_store.save_sessions()
 
-    return {"answer": answers[-1] if answers else "No assistant response found."}
+    return True

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from routes.chat import chat_router
 from routes.upload import upload_router
+from routes.stream import stream_router
 from models.session_store import session_store
 
 app = FastAPI()
@@ -15,3 +16,4 @@ async def lifespan(app: FastAPI):
 # Include routers
 app.include_router(chat_router)
 app.include_router(upload_router)
+app.include_router(stream_router)
