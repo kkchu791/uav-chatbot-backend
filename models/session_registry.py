@@ -2,16 +2,11 @@ import json
 import os
 from .session import Session
 
-SESSIONS_FILE = "../session_store.json"
+SESSIONS_FILE = "../session_registry.json"
 
-class SessionStore:
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(SessionStore, cls).__new__(cls)
-            cls._instance.sessions = {}
-        return cls._instance
+class SessionRegistry:
+    def __init__(self):
+        self.sessions = {}
 
     def create_session(self):
         session = Session()
@@ -36,7 +31,7 @@ class SessionStore:
 
     def save_sessions(self):
         with open(SESSIONS_FILE, "w") as f:
-            json.dump({sid: s.to_dict() for sid, s in self.sessions.items()}, f, indent=2)
+            json.dump(self.to_dict(), f, indent=2)
 
     def load_sessions(self):
         if os.path.exists(SESSIONS_FILE):
@@ -47,7 +42,7 @@ class SessionStore:
                         sid: Session.from_dict(sdata) for sid, sdata in data.items()
                     }
             except json.JSONDecodeError:
-                print("session_store.json is corrupt, starting fresh.")
+                print("session_registry.json is corrupt, starting fresh.")
                 self.sessions = {}
 
-session_store = SessionStore()
+session_registry = SessionRegistry()

@@ -3,15 +3,15 @@ from contextlib import asynccontextmanager
 from routes.chat import chat_router
 from routes.upload import upload_router
 from routes.stream import stream_router
-from models.session_store import session_store
+from models.session_registry import session_registry
 
 app = FastAPI()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    session_store.load_sessions()
+    session_registry.load_sessions()
     yield
-    session_store.save_sessions()
+    session_registry.save_sessions()
 
 # Include routers
 app.include_router(chat_router)

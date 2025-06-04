@@ -5,7 +5,7 @@ class Session:
         self.session_id = session_id
         self.file_ids = []
         self.thread_id = None
-        self.queue = None
+        self.queue = asyncio.Queue()
 
     def add_file_id(self, file_id):
         self.file_ids.append(file_id)
@@ -18,12 +18,6 @@ class Session:
 
     def get_thread_id(self):
         return self.thread_id
-    
-    def create_queue(self):
-        self.queue = asyncio.Queue()
-
-    def get_queue(self):
-        return self.queue
 
     def to_dict(self):
         return {
