@@ -1,8 +1,7 @@
-# services/telemetry/parse.py
-
 from pymavlink.DFReader import DFReader_binary
 import tempfile
 import os
+from collections import defaultdict
 
 error_codes = {
     2: {0: "Errors Resolved", 1: "Late Frame : no updates received from receiver for two seconds"},
@@ -34,20 +33,44 @@ error_codes = {
     29: {0: "Vibration Compensation Deactivated", 1: "Activated"}
 }
 
+
+mode_descriptions = {
+    0: "Stabilize",
+    1: "Acro",
+    2: "AltHold",
+    3: "Auto",
+    4: "Guided",
+    5: "Loiter",
+    6: "RTL",
+    7: "Circle",
+    9: "Land",
+    10: "Drift",
+    11: "Sport",
+    13: "PosHold",
+    14: "Brake",
+    15: "Throw",
+    16: "Avoid_ADSB",
+    17: "Guided_NoGPS",
+    18: "SmartRTL",
+    19: "FlowHold",
+    20: "Follow",
+    21: "ZigZag",
+    22: "SystemID",
+    23: "Heli_Autorotate",
+    24: "AutoTune",
+    25: "Reserved"
+}
+
 def parse_bin_file(file_bytes: bytes):
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         tmp.write(file_bytes)
         tmp.flush()
         tmp_path = tmp.name
 
+    flight_data = defaultdict(dict)
+
     try:
         mav = DFReader_binary(tmp_path)
-
-        altitudes = []
-        battery_temps = []
-        gps_fixes = []
-        mode_changes = []
-        critical_errors = []
 
         while True:
             msg = mav.recv_msg()
@@ -56,36 +79,70 @@ def parse_bin_file(file_bytes: bytes):
 
             msg_type = msg.get_type()
             time = getattr(msg, 'TimeUS', None)
+            if time is None:
+                continue
 
-            if msg_type == "GPS":
+            if msg_type == "MSG" and hasattr(msg, "Message"):
+                text = msg.Message.lower()
+                if "armed" in text:
+                    flight_data[time]["Armed"] = True
+                elif "disarmed" in text:
+                    flight_data[time]["Disarmed"] = True
+
+            elif msg_type == "GPS":
                 if hasattr(msg, "Alt"):
-                    altitudes.append((msg.TimeUS, msg.Alt))
+                    flight_data[time]["Altitude"] = msg.Alt
                 if hasattr(msg, "Status"):
-                    gps_fixes.append((msg.TimeUS, msg.Status))
+                    flight_data[time]["GPSFix"] = msg.Status
+                if hasattr(msg, "Lat") and hasattr(msg, "Lng"):
+                    flight_data[time]["Lat"] = msg.Lat / 1e7
+                    flight_data[time]["Lng"] = msg.Lng / 1e7
 
-            if msg_type == "MODE":
-                mode_changes.append((time, getattr(msg, "Mode", None)))
+            elif msg_type == "BAT":
+                if hasattr(msg, "Temp"):
+                    flight_data[time]["BatteryTemp"] = msg.Temp
+                if hasattr(msg, "Volt"):
+                    flight_data[time]["BatteryVolt"] = msg.Volt
+                if hasattr(msg, "Curr"):
+                    flight_data[time]["BatteryCurr"] = msg.Curr
 
-            if msg_type == "BAT" and hasattr(msg, "Temp"):
-                battery_temps.append((msg.TimeUS, msg.Temp))
+            elif msg_type == "ATT":
+                if hasattr(msg, "Roll"):
+                    flight_data[time]["Roll"] = msg.Roll
+                if hasattr(msg, "Pitch"):
+                    flight_data[time]["Pitch"] = msg.Pitch
+                if hasattr(msg, "Yaw"):
+                    flight_data[time]["Yaw"] = msg.Yaw
 
-            if msg_type == "ERR" and hasattr(msg, "ECode") and hasattr(msg, "Subsys"):
+            elif msg_type == "VIBE":
+                if hasattr(msg, "VibeX"):
+                    flight_data[time]["VibeX"] = msg.VibeX
+                if hasattr(msg, "VibeY"):
+                    flight_data[time]["VibeY"] = msg.VibeY
+                if hasattr(msg, "VibeZ"):
+                    flight_data[time]["VibeZ"] = msg.VibeZ
+
+            elif msg_type == "MODE":
+                mode_code = getattr(msg, "Mode", None)
+                mode_name = mode_descriptions.get(mode_code, "Unknown")
+                flight_data[time]["Mode"] = mode_name
+
+            elif msg_type == "ERR" and hasattr(msg, "ECode") and hasattr(msg, "Subsys"):
                 code_desc = error_codes.get(msg.Subsys, {}).get(msg.ECode)
-                if code_desc:
-                    critical_errors.append({
-                        "TimeUS": time,
-                        "Subsys": msg.Subsys,
-                        "ECode": msg.ECode,
-                        "Description": code_desc
-                    })
 
-        return {
-            "altitudes": altitudes,
-            "gps_fix_statuses": gps_fixes,
-            "battery_temps": battery_temps,
-            "mode_changes": mode_changes,
-            "critical_errors": critical_errors
-        }
+                if "Errors" not in flight_data[time]:
+                    flight_data[time]["Errors"] = []
+
+                flight_data[time]["Errors"].append({
+                    "Subsys": msg.Subsys,
+                    "ECode": msg.ECode,
+                    "Description": code_desc or "Unknown Error",
+                })
+
+                if msg.Subsys == 28 and msg.ECode == 1:
+                    flight_data[time]["RCSignalLoss"] = True
+
+        return flight_data
 
     finally:
         os.remove(tmp_path)

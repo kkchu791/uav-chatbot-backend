@@ -8,7 +8,7 @@ async def stream_events(session, request):
             while not await request.is_disconnected():
                 try:
                     chunk = await asyncio.wait_for(queue.get(), timeout=30)
-                    print("streaming chunk", "begin " + chunk + " end")
+                    print("streaming chunk ", chunk)
                     yield f"data: {chunk}\n\n"
                 except asyncio.TimeoutError:
                     yield f"data: [ping]\n\n"

@@ -6,21 +6,11 @@ from pathlib import Path
 
 def handle_upload(file_bytes: bytes, session_id: str):
     parsed = parse_bin_file(file_bytes)
-    write_telemetry_to_csv(parsed)
+    summary_path = "flight_summary.csv"
+    write_telemetry_to_csv(parsed, summary_path)
 
-    file_paths = [
-        "new_altitudes.csv",
-        "new_critical_errors.csv",
-        "new_gps_fixes.csv",
-        "new_mode_changes.csv",
-        "new_battery_temps.csv"
-    ]
-
-    uploaded_files = [
-        client.files.create(file=Path(path), purpose="assistants")
-        for path in file_paths
-    ]
+    uploaded_file = client.files.create(file=Path(summary_path), purpose="assistants")
 
     session = session_registry.find_or_create(session_id)
-    session.update(file_ids=[f.id for f in uploaded_files])
+    session.update(file_ids=[uploaded_file.id])
     session_registry.save_sessions()
