@@ -84,10 +84,10 @@ def parse_bin_file(file_bytes: bytes):
 
             if msg_type == "MSG" and hasattr(msg, "Message"):
                 text = msg.Message.lower()
-                if "armed" in text:
-                    flight_data[time]["Armed"] = True
-                elif "disarmed" in text:
+                if "disarmed" in text:
                     flight_data[time]["Disarmed"] = True
+                elif "armed" in text:
+                    flight_data[time]["Armed"] = True
 
             elif msg_type == "GPS":
                 if hasattr(msg, "Alt"):

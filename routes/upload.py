@@ -16,5 +16,7 @@ async def upload_file(
         content = await file.read()
         handle_upload(content, session_id)
         return {"message": "File parsed and stored"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error, {e}")

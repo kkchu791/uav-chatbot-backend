@@ -22,6 +22,8 @@ def chat(request: Request, body: ChatRequest):
         run_chat_stream(thread, question)
 
         return {"status": "ok"}
+    except HTTPException:
+        raise
     except Exception as e:
         print("Chat error:", e)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
