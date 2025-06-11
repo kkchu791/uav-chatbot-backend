@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from models.schemas import ChatRequest
 from usecases.chat import run_chat_stream
 from models.session_registry import session_registry
@@ -7,13 +7,14 @@ from services.llm.thread_factory import LLMThreadFactory
 chat_router = APIRouter()
 
 @chat_router.post("/api/chat")
-def chat(body: ChatRequest):
+def chat(request: Request, body: ChatRequest):
     try:
         question = body.question
-        session_id = body.session_id
-        print(session_id, 'session_id')
+        session_id = request.cookies.get("session_id")
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Missing session ID in cookie")
+
         session = session_registry.find_or_create(session_id)
-        print(session, 'session')
         factory = LLMThreadFactory()
         provider = body.provider or 'openai'
         thread = factory.create(provider, session)
