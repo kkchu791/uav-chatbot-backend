@@ -100,6 +100,9 @@ def parse_bin_file(file_bytes: bytes):
 
             elif msg_type == "BAT":
                 if hasattr(msg, "Temp"):
+                    flight_data[time]["BatteryTemp"] = None
+                    flight_data[time]["BatteryTempNote"] = "Possible missing or nonfunctional sensor"
+                else:
                     flight_data[time]["BatteryTemp"] = msg.Temp
                 if hasattr(msg, "Volt"):
                     flight_data[time]["BatteryVolt"] = msg.Volt

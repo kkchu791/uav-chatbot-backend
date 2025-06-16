@@ -4,11 +4,9 @@ from routes.chat import chat_router
 from routes.upload import upload_router
 from routes.stream import stream_router
 from models.session_registry import session_registry
-from services.middleware.session_cookie import add_session_cookie
 from routes.session import session_router
 
 app = FastAPI()
-app.middleware("http")(add_session_cookie)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
