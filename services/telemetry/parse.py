@@ -33,7 +33,6 @@ error_codes = {
     29: {0: "Vibration Compensation Deactivated", 1: "Activated"}
 }
 
-
 mode_descriptions = {
     0: "Stabilize",
     1: "Acro",
